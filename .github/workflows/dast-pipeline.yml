@@ -1,0 +1,34 @@
+name: DevSecOps Automated DAST Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  dast_scan:
+    name: Automated DAST Scanning Suite
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Download the code into the cloud workspace container
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    # 2. Spin up the target web application dynamically for scanning
+    # For demonstration, we run a lightweight local Python test server on port 8000
+    - name: Launch Target Web Application
+      run: |
+        python3 -m http.server 8000 &
+        sleep 3 # Gives the test web application server time to fully boot up
+
+    # 3. OWASP ZAP DAST Baseline Scan Integration
+    # This pulls the official ZAP container and actively attacks the running application target
+    - name: Execute OWASP ZAP DAST Scan
+      uses: zaproxy/action-baseline@v0.12.0
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        target: 'http://localhost:8000' # The URL endpoint of your live web app
+        rules_file_name: '.zap/rules.tsv'
+        fail_action: true # Hard fails the build if critical flaws are actively discovered
