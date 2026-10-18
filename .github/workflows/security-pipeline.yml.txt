@@ -1,0 +1,56 @@
+name: DevSecOps Automated Security Pipeline
+
+# This triggers the security checks every time someone pushes code
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  security_audit:
+    name: Multi-Layer Security Scanning Suite
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Download the code into GitHub's safe virtual environment
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # 2. SECRET SCANNING LAYER (Checks if you leaked passwords or API keys)
+    - name: Execute Secret Scan Detection
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: false # Fails the build if a secret is found
+
+    # 3. STATIC APPLICATION SECURITY TESTING (SAST)
+    # Sets up Python and runs 'Bandit' to check for insecure code loops
+    - name: Set up Python Environment
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    # Install the Bandit testing framework
+    - name: Install SAST Scanner (Bandit)
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit
+
+    # Scan python files; stops the pipeline if unsafe code forms are found
+    - name: Execute SAST Analysis
+      run: |
+        bandit -r . -ll -ii
+
+    # 4. SOFTWARE COMPOSITION ANALYSIS (SCA)
+    # Scans your external packages to ensure they are updated and uncompromised
+    - name: Execute SCA Dependency Scan (Trivy)
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'table'
+        exit-code: '1' # Fails the pipeline if critical bugs exist
+        severity: 'HIGH,CRITICAL'
